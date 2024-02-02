@@ -12,7 +12,7 @@ fn index() -> &'static str {
 #[get("/dirtyworm")]
 fn dirtyworm() -> content::RawHtml<&'static str> {
     content::RawHtml(
-        "<canvas id=\"dddc\" width=\"150\" height=\"150\">
+        "<canvas id=\"dddc\" width=\"640\" height=\"480\">
             Dirty deeds done dirt cheap    
         </canvas>
 
@@ -37,7 +37,7 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 wgl.attachShader(shader_program, fragment_shader);
                 wgl.linkProgram(shader_program);
 
-                if(!wgl.getProgramParameter(shaderProgram, wgl.LINK_STATUS)) {
+                if(!wgl.getProgramParameter(shader_program, wgl.LINK_STATUS)) {
                     alert(\"shit's fucked, mate... with the program\");
                     return null;
                 }
@@ -60,13 +60,17 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             }
 
             /*
-            The following two init functions should be placed in a seperate file, maybe init-buffers.js?
+            The following three init functions should be placed in a seperate file, maybe init-buffers.js?
              */
             function init_buffers(wgl) {
                 const position_buffer = init_position_buffer(wgl);
+                const color_buffer = init_color_buffer(wgl);
+                const index_buffer = init_index_buffer(wgl);
                 
                 return {
                     position: position_buffer,
+                    color: color_buffer,
+                    indices: index_buffer,
                 };
             }
 
@@ -74,17 +78,103 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 const position_buffer = wgl.createBuffer();
                 wgl.bindBuffer(wgl.ARRAY_BUFFER, position_buffer);
 
-                const positions = [1.0, 1.0, -1.0, 1.0, 1.0, -1.0, -1.0, -1.0];
-                wgl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), wgl.STATIC_DRAW);
+                const positions = [
+                    // Front face
+                    -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
+                    // Back face
+                    -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0,
+                    // Top face
+                    -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0,
+                    // Bottom face
+                    -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,
+                    // Right face
+                    1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0,
+                    // Left face
+                    -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0,
+                ];
+                wgl.bufferData(wgl.ARRAY_BUFFER, new Float32Array(positions), wgl.STATIC_DRAW);
 
                 return position_buffer;
             }
 
+            function init_color_buffer(wgl) {
+                /*
+                const colors = [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0, // white
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0, // red
+                    0.0,
+                    1.0,
+                    0.0,
+                    1.0, // green
+                    0.0,
+                    0.0,
+                    1.0,
+                    1.0, // blue
+                ];
+                */
+
+                const face_colors = [
+                    [1.0, 1.0, 1.0, 1.0], // Front face: white
+                    [1.0, 0.0, 0.0, 1.0], // Back face: red
+                    [0.0, 1.0, 0.0, 1.0], // Top face: green
+                    [0.0, 0.0, 1.0, 1.0], // Bottom face: blue
+                    [1.0, 1.0, 0.0, 1.0], // Right face: yellow
+                    [1.0, 0.0, 1.0, 1.0], // Left face: purple
+                ];
+
+                var colors = [];
+                for (var j = 0; j<face_colors.length; ++j) {
+                    const c = face_colors[j];
+                    colors = colors.concat(c,c,c,c)
+                }
+
+                const color_buffer = wgl.createBuffer();
+                wgl.bindBuffer(wgl.ARRAY_BUFFER, color_buffer);
+                wgl.bufferData(wgl.ARRAY_BUFFER, new Float32Array(colors), wgl.STATIC_DRAW);
+
+                return color_buffer
+            }
+
+            function init_index_buffer(wgl) {
+                const index_buffer = wgl.createBuffer();
+                wgl.bindBuffer(wgl.ELEMENT_ARRAY_BUFFER, index_buffer);
+
+                const indices = [
+                    0,1,2,
+                    0,2,3, // Front
+                    4,5,6,
+                    4,6,7, // Back
+                    8,9,10,
+                    8,10,11, // Top
+                    12,13,14,
+                    12,14,15, // Bottom
+                    16,17,18,
+                    16,18,19, // Right
+                    20,21,22,
+                    20,22,23, // Left
+                ];
+
+                // Send the element array to WebGL
+                wgl.bufferData(
+                    wgl.ELEMENT_ARRAY_BUFFER,
+                    new Uint16Array(indices),
+                    wgl.STATIC_DRAW,
+                );
+
+                return index_buffer
+            }
+
             /*
-            The following two functions should be put into seperate file and exported.
+            The following three functions should be put into seperate file and exported.
             Now... what would be a good name... something like draw-scene.js!?
              */
-            function draw_scene(wgl, program_info, buffers) {
+            function draw_scene(wgl, program_info, buffers, cube_rotation) {
                 wgl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
                 wgl.clearDepth(1.0); // Clear everything
                 wgl.enable(wgl.DEPTH_TEST);
@@ -102,7 +192,7 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 const fov = (45 * Math.PI) / 100; // in radians
                 const aspect = wgl.canvas.clientWidth / wgl.canvas.clientHeight;
                 const z_near = 0.1;
-                const z_far = 100;
+                const z_far = 100.0;
                 const projection_matrix = mat4.create();
 
                 // note: glmatrix.js always has the first argument
@@ -119,7 +209,111 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                     model_view_matrix, // matrix to translate
                     [-0.0, 0.0, -6.0],  // amount to translate
                 );
+
+                // Rotate around y axis
+                mat4.rotate(
+                    model_view_matrix, // destination matrix
+                    model_view_matrix, // matrix to rotate
+                    cube_rotation * 5, // amount to rotate in radians
+                    [0,1,0], // axis to rotate around
+                );
+
+                // Rotate around z axis
+                mat4.rotate(
+                    model_view_matrix, // destination matrix
+                    model_view_matrix, // matrix to rotate
+                    cube_rotation * .2, // amount to rotate in radians
+                    [0,0,1], // axis to rotate around
+                );
+
+                // Rotate around x axis
+                mat4.rotate(
+                    model_view_matrix, // destination matrix
+                    model_view_matrix, // matrix to rotate
+                    cube_rotation, // amount to rotate in radians
+                    [1,0,0], // axis to rotate around
+                );
+
+                // Tell WebGL how to pull out the positions from the position
+                // buffer into the vertexPosition attribute.
+                set_position_attribute(wgl, buffers, program_info);
+
+                // Tell WebGL to use the colors...
+                set_color_attribute(wgl, buffers, program_info);
+
+                // Tell WebGL which indices to use to index the vertices
+                wgl.bindBuffer(wgl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+                // Tell WebGL to use our program when drawing.
+                wgl.useProgram(program_info.program);
+
+                // Set the shader uniforms
+                wgl.uniformMatrix4fv(
+                    program_info.uniformLocations.projectionMatrix,
+                    false,
+                    projection_matrix,
+                );
+
+                wgl.uniformMatrix4fv(
+                    program_info.uniformLocations.modelViewMatrix,
+                    false,
+                    model_view_matrix,
+                );
+
+                {
+                    /* 
+                    const offset = 0;
+                    const vertex_count = 4;
+                    wgl.drawArrays(wgl.TRIANGLE_STRIP, offset, vertex_count);
+                    */
+
+                    const vertex_count = 36;
+                    const type = wgl.UNSIGNED_SHORT;
+                    const offset = 0;
+                    wgl.drawElements(wgl.TRIANGLES, vertex_count, type, offset)
+                }
             }
+
+            function set_position_attribute(wgl, buffers, program_info) {
+                const num_components = 3; // pull out 3 values per iteration
+                const type = wgl.FLOAT; // the data in the buffer is 32bit floats
+                const normalize = false; // don't normalize
+                const stride = 0; // how many bytes to get from one set of alues to the next
+                const offset = 0; // how many bytes inside the buffer to start from
+
+                wgl.bindBuffer(wgl.ARRAY_BUFFER, buffers.position);
+                wgl.vertexAttribPointer(
+                    program_info.attribLocations.vertexPosition,
+                    num_components,
+                    type,
+                    normalize,
+                    stride,
+                    offset,
+                );
+
+                wgl.enableVertexAttribArray(program_info.attribLocations.vertexPosition);
+            }
+
+            function set_color_attribute(wgl, buffers, program_info) {
+                const num_components = 4;
+                const type = wgl.FLOAT;
+                const normalize = false;
+                const stride = 0;
+                const offset = 0;
+                wgl.bindBuffer(wgl.ARRAY_BUFFER, buffers.color);
+                wgl.vertexAttribPointer(
+                    program_info.attribLocations.vertexColor,
+                    num_components,
+                    type,
+                    normalize,
+                    stride,
+                    offset,
+                );
+
+                wgl.enableVertexAttribArray(program_info.attribLocations.vertexColor);
+            }
+
+            // export {draw_scene}  /* Use this when we move to seperate files */
 
             /*
             Remember, main should be in a file with the shader functions, maybe webgl-demo.js...
@@ -127,19 +321,28 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             function main() {
                 const vsSource = `
                     attribute vec4 aVertexPosition;
+                    attribute vec4 aVertexColor;
+
                     uniform mat4 uModelViewMatrix;
                     uniform mat4 uProjectionMatrix;
+
+                    varying lowp vec4 vColor;
+
                     void main() {
                         gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                        vColor = aVertexColor;
                     }
                 `;
 
                 const fsSource = `
+                varying lowp vec4 vColor;
                     void main() {
-                        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+                        gl_FragColor = vColor;
                     }
                 `;
 
+                let cube_rotation = 0.0;
+                let deltaTime = 0;
                 
                 const canvas = document.getElementById(\"dddc\");
                 if(canvas.getContext) {
@@ -148,18 +351,39 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                     const shaderProgram = init_shader_program(wgl, vsSource, fsSource);
                     const programInfo = {
                         program: shaderProgram,
-                        attributions: {
-                            vertexPosition: wgl.getAttribLocation(shaderProgram, aVertexPosition);
+                        attribLocations: {
+                            vertexPosition: wgl.getAttribLocation(shaderProgram, \"aVertexPosition\"),
+                            vertexColor: wgl.getAttribLocation(shaderProgram, \"aVertexColor\"),
                         },
                         uniformLocations: {
-                            projectionMatrix: wgl.getUniformLocation(shaderProgram, uProjectionMatrix),
-                            modelViewMatrix: wgl.getUniformLocation(shaderProgram, uModelViewMatrix)
+                            projectionMatrix: wgl.getUniformLocation(shaderProgram, \"uProjectionMatrix\"),
+                            modelViewMatrix: wgl.getUniformLocation(shaderProgram, \"uModelViewMatrix\")
                         }
                     }
+
+                    // Call the routine that builds all the objects being drawn
+                    const buffers = init_buffers(wgl);
+
+                    // Draw it, you fool!
+                    let then = 0;
+                    // Draw the scene repeatedly
+                    function render(now) {
+                        now *= 0.001; // convert to seconds
+                        deltaTime = now - then
+                        then = now;
+
+                        draw_scene(wgl, programInfo, buffers, cube_rotation);
+                        cube_rotation += deltaTime;
+
+                        requestAnimationFrame(render);
+                    }
+                    requestAnimationFrame(render);
+                    draw_scene(wgl, programInfo, buffers);
+
                     //ctx.font = \"10px serif\";
                     //ctx.fillText(\"Dirty worm consumes\", 10, 50);
-                    wgl.clearColor(0.0, 0.0, 0.0, 1.0);
-                    wgl.clear(wgl.COLOR_BUFFER_BIT);
+                    //wgl.clearColor(0.0, 0.0, 0.0, 1.0);
+                    //wgl.clear(wgl.COLOR_BUFFER_BIT);
                 }
             }
 
