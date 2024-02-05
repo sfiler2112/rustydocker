@@ -60,16 +60,18 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             }
 
             /*
-            The following three init functions should be placed in a seperate file, maybe init-buffers.js?
+            The following init functions should be placed in a seperate file, maybe init-buffers.js?
              */
             function init_buffers(wgl) {
                 const position_buffer = init_position_buffer(wgl);
-                const color_buffer = init_color_buffer(wgl);
+                //const color_buffer = init_color_buffer(wgl);
+                const texture_coord_buffer = init_texture_buffer(wgl);
                 const index_buffer = init_index_buffer(wgl);
                 
                 return {
                     position: position_buffer,
-                    color: color_buffer,
+                    //color: color_buffer,
+                    texture_coord: texture_coord_buffer,
                     indices: index_buffer,
                 };
             }
@@ -168,6 +170,34 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 );
 
                 return index_buffer
+            }
+
+            function init_texture_buffer(wgl) {
+                const texture_coord_buffer = wgl.createBuffer();
+                wgl.bindBuffer(wgl.ARRAY_BUFFER, texture_coord_buffer);
+
+                const texture_coordinates = [
+                    // Front
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                    // Back
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                    // Top
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                    // Bottom
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                    // Right
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                    // Left
+                    0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0,
+                ];
+
+                wgl.bufferData(
+                    wgl.ARRAY_BUFFER,
+                    new Float32Array(texture_coordinates),
+                    wgl.STATIC_DRAW
+                );
+
+                return texture_coord_buffer;
             }
 
             /*
@@ -316,28 +346,37 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             // export {draw_scene}  /* Use this when we move to seperate files */
 
             /*
-            Remember, main should be in a file with the shader functions, maybe webgl-demo.js...
+            Remember, main should be in a file with the shader  and texture functions, maybe webgl-demo.js...
              */
             function main() {
                 const vsSource = `
                     attribute vec4 aVertexPosition;
-                    attribute vec4 aVertexColor;
+                    //attribute vec4 aVertexColor;
+                    attribute vec2 aTextureCoord;
 
                     uniform mat4 uModelViewMatrix;
                     uniform mat4 uProjectionMatrix;
 
-                    varying lowp vec4 vColor;
+                    //varying lowp vec4 vColor;
+                    varying highp vec2 vTextureCoord
 
                     void main() {
                         gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-                        vColor = aVertexColor;
+                        //vColor = aVertexColor;
+                        vTextureCoord = aTextureCoord
                     }
                 `;
 
                 const fsSource = `
-                varying lowp vec4 vColor;
+                    //varying lowp vec4 vColor;
+                    varying highp vec2 vTextureCoord;
+
+                    uniform sampler2d uSampler;
+                    out vec4 fragColor;
+
                     void main() {
-                        gl_FragColor = vColor;
+                        //gl_FragColor = vColor;
+                        fragColor = texture(uSampler, vTextureCoord);
                     }
                 `;
 
@@ -353,16 +392,23 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                         program: shaderProgram,
                         attribLocations: {
                             vertexPosition: wgl.getAttribLocation(shaderProgram, \"aVertexPosition\"),
-                            vertexColor: wgl.getAttribLocation(shaderProgram, \"aVertexColor\"),
+                            //vertexColor: wgl.getAttribLocation(shaderProgram, \"aVertexColor\"),
+                            textureCoord: wgl.getAttribLocation(shaderProgram, \"aTextureCoord\"),
                         },
                         uniformLocations: {
                             projectionMatrix: wgl.getUniformLocation(shaderProgram, \"uProjectionMatrix\"),
-                            modelViewMatrix: wgl.getUniformLocation(shaderProgram, \"uModelViewMatrix\")
+                            modelViewMatrix: wgl.getUniformLocation(shaderProgram, \"uModelViewMatrix\"),
+                            uSampler: wgl.getUniformLocation(shaderProgram, \"uSampler\"),
                         }
                     }
 
                     // Call the routine that builds all the objects being drawn
                     const buffers = init_buffers(wgl);
+
+                    // Load texture
+                    const texture = load_texture(wgl, \"cubetexture.png\");
+                    // Flip image pixels to bottom-to-top order.  WebGL expects it that way.
+                    wgl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
                     // Draw it, you fool!
                     let then = 0;
@@ -386,6 +432,66 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                     //wgl.clear(wgl.COLOR_BUFFER_BIT);
                 }
             }
+
+            // Initialize a texture and load an image.  When finished loading copy into the texture.
+            function load_texture(wgl, url) {
+                const texture = wgl.createTexture();
+                wgl.bindTexture(wgl.TEXTURE_2D, texture);
+
+
+                const level = 0;
+                const internal_format = wgl.RGBA;
+                const width = 1;
+                const height = 1;
+                const border = 0;
+                const src_format = wgl.RGBA;
+                const src_type = wgl.UNSIGNED_BYTE;
+                const pixel = new Uint8Array([0,0,255,255]); //opaque blue
+                wgl.texImage2D(
+                    wgl.TEXTURE_2D,
+                    level,
+                    internal_format,
+                    width,
+                    height,
+                    border,
+                    src_format,
+                    src_type,
+                    pixel,
+                );
+
+                const image = new Image();
+                image.onload = () => {
+                    wgl.bindTexture(wgl.TEXTURE_2D, texture);
+                    wgl.texImage2d(
+                        wgl.TEXTURE_2D,
+                        level,
+                        internal_format,
+                        src_format,
+                        src_type,
+                        image,
+                    );
+
+                    // Images that have both width and height values that are powers of 2 are treated differently than those that do not.
+                    if(isPowerOf2(image.width) && isPowerOf2(image.height)) {
+                        // Generate mips when it's a power of 2.
+                        wgl.generateMipmap(wgl.TEXTURE_2D);
+                    } else {
+                        // Not a power of 2, turn off mips and set wrapping to clamp to edge.
+                        wgl.texParameteri(wgl.TEXTURE_2D, wgl.TEXTURE_WRAP_S, wgl.CLAMP_TO_EDGE);
+                        wgl.texParameteri(wgl.TEXTURE_2D, wgl.TEXTURE_WRAP_T, wgl.CLAMP_TO_EDGE);
+                        wgl.texParameteri(wgl.TEXTURE_2D, wgl.TEXTURE_MIN_FILTER, wgl.LINEAR);
+                    }
+                };
+
+                image.src = url;
+
+                return texture;
+            }
+
+            function isPowerOf2(value) {
+                return (value & (value -1)) === 0;
+            }
+
 
             window.addEventListener(\"load\", main);
         </script>")
