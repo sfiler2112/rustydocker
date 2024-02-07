@@ -2,6 +2,9 @@
 extern crate rocket;
 
 use rocket::response::content;
+use rocket::form::Form;
+use rocket::http::RawStr;
+use rocket::Error;
 
 
 #[get("/")]
@@ -530,7 +533,10 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
 
 
             window.addEventListener(\"load\", main);
-        </script>")
+        </script>
+        <div>
+            \"funny cube\"
+        </div>")
 }
 
 #[get("/worm")]
@@ -559,10 +565,50 @@ fn worm() -> content::RawHtml<&'static str> {
     )
 }
 
+#[derive(Debug, FromForm)]
+struct UserInput<'f> {
+    value: &'f str
+}
+
+#[get("/submit")]
+fn submit_input() -> content::RawHtml<&'static str> {
+    content::RawHtml("<form action=\"/submit\" method=\"post\" accept-charset=\"utf-8\">
+        <label> A place for symbols of language... a textarea?
+            <br />
+            <textarea name=\"textarea\">type HERE.</textarea>
+        </label>
+        <br />
+        <label>
+            <input type=\"submit\" value=\"SUBMIT\">
+        </label>
+    </form>")
+}
+
+#[post("/submit", data="<usertext>")]
+fn receive_input(usertext: Result<Form<UserInput>, rocket::form::Errors<'_>>) -> String {
+    match usertext {
+        Ok(form) => format!("{:?}", &*form),
+        Err(form_error) => format!("don't even bother: {:?}", form_error),       
+    }
+}
+
+fn compute_sum(num_a: i32, num_b: i32) -> i32 {
+    num_a + num_b
+}
+
+#[get("/addnums")]
+fn add_nums() -> String {
+
+    format!("I'm adding 3 + {}. \n The sum is {}", 3, compute_sum(3,3))
+}
+
 #[launch]
 fn rocket() -> _ {
     rocket::build()
     .mount("/", routes![index])
     .mount("/butt", routes![worm])
     .mount("/", routes![dirtyworm])
+    .mount("/", routes![add_nums])
+    .mount("/", routes![submit_input])
+    .mount("/", routes![receive_input])
 }
