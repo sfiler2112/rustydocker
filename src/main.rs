@@ -51,7 +51,7 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 wgl.compileShader(shader);
 
                 if (!wgl.getShaderParameter(shader, wgl.COMPILE_STATUS)) {
-                    alert(\"shit's fucked, mate... with the shader\");
+                    alert(`shit's fucked, mate... with the shader: ${wgl.getShaderInfoLog(shader)}`);
                     wgl.deleteShader(shader);
                     return null;
                 }
@@ -64,14 +64,14 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
              */
             function init_buffers(wgl) {
                 const position_buffer = init_position_buffer(wgl);
-                //const color_buffer = init_color_buffer(wgl);
-                const texture_coord_buffer = init_texture_buffer(wgl);
+                const color_buffer = init_color_buffer(wgl);
+                //const texture_coord_buffer = init_texture_buffer(wgl);
                 const index_buffer = init_index_buffer(wgl);
                 
                 return {
                     position: position_buffer,
-                    //color: color_buffer,
-                    texture_coord: texture_coord_buffer,
+                    color: color_buffer,
+                    //texture_coord: texture_coord_buffer,
                     indices: index_buffer,
                 };
             }
@@ -203,6 +203,7 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             /*
             The following three functions should be put into seperate file and exported.
             Now... what would be a good name... something like draw-scene.js!?
+            If you ever want to try using textures again remember to add that parameter.
              */
             function draw_scene(wgl, program_info, buffers, cube_rotation) {
                 wgl.clearColor(0.0, 0.0, 0.0, 1.0); // Clear to black, fully opaque
@@ -268,8 +269,11 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 // buffer into the vertexPosition attribute.
                 set_position_attribute(wgl, buffers, program_info);
 
-                // Tell WebGL to use the colors...
+                // Tell WebGL to use the colors... at least they actually show up.
                 set_color_attribute(wgl, buffers, program_info);
+
+                // Tell WebGL to use texture... unfortunately textures don't want to play nice
+                //set_texture_attribute(wgl, buffers, program_info);
 
                 // Tell WebGL which indices to use to index the vertices
                 wgl.bindBuffer(wgl.ELEMENT_ARRAY_BUFFER, buffers.indices);
@@ -289,6 +293,15 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                     false,
                     model_view_matrix,
                 );
+
+                // Affect texture unit 0
+                //wgl.activeTexture(wgl.TEXTURE0);
+
+                // Bind texture to texture unit 0
+                //wgl.bindTexture(wgl.TEXTURE_2D, texture);
+
+                // Tell shader we bound the texture to texture unit 0
+                //wgl.uniform1i(program_info.uniformLocations.uSampler, 0);
 
                 {
                     /* 
@@ -343,6 +356,29 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                 wgl.enableVertexAttribArray(program_info.attribLocations.vertexColor);
             }
 
+            // WebGL needs to know how to pull texture coords from the buffer.
+            // Will the following function help?!
+            function set_texture_attribute(wgl, buffers, program_info) {
+                const num = 2; // coords are composed of 2 values
+                const type = wgl.FLOAT; // data in buffer is 32-bit float
+                const normalize = false;
+                const stride = 0; // bytes from one set to the next
+                const offset = 0; // bytes inside buffer to start from
+
+                wgl.bindBuffer(wgl.ARRAY_BUFFER, buffers.textureCoord);
+                wgl.vertexAttribPointer(
+                    program_info.attribLocations.textureCoord,
+                    num,
+                    type,
+                    normalize,
+                    stride,
+                    offset,
+                );
+
+                wgl.enableVertexAttribArray(program_info.attribLocations.textureCoord);
+
+            }
+
             // export {draw_scene}  /* Use this when we move to seperate files */
 
             /*
@@ -351,32 +387,32 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
             function main() {
                 const vsSource = `
                     attribute vec4 aVertexPosition;
-                    //attribute vec4 aVertexColor;
-                    attribute vec2 aTextureCoord;
+                    attribute vec4 aVertexColor;
+                    //attribute vec2 aTextureCoord;
 
                     uniform mat4 uModelViewMatrix;
                     uniform mat4 uProjectionMatrix;
 
-                    //varying lowp vec4 vColor;
-                    varying highp vec2 vTextureCoord
+                    varying lowp vec4 vColor;
+                    //varying highp vec2 vTextureCoord
 
-                    void main() {
+                    void main(void) {
                         gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-                        //vColor = aVertexColor;
-                        vTextureCoord = aTextureCoord
+                        vColor = aVertexColor;
+                        //vTextureCoord = aTextureCoord
                     }
                 `;
 
                 const fsSource = `
-                    //varying lowp vec4 vColor;
-                    varying highp vec2 vTextureCoord;
+                    varying lowp vec4 vColor;
+                    //varying highp vec2 vTextureCoord;
 
-                    uniform sampler2d uSampler;
-                    out vec4 fragColor;
+                    uniform sampler2D uSampler;
+                    //out vec4 fragColor;
 
-                    void main() {
-                        //gl_FragColor = vColor;
-                        fragColor = texture(uSampler, vTextureCoord);
+                    void main(void) {
+                        gl_FragColor = vColor;
+                        //fragColor = texture2D(uSampler, vTextureCoord);
                     }
                 `;
 
@@ -392,8 +428,8 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                         program: shaderProgram,
                         attribLocations: {
                             vertexPosition: wgl.getAttribLocation(shaderProgram, \"aVertexPosition\"),
-                            //vertexColor: wgl.getAttribLocation(shaderProgram, \"aVertexColor\"),
-                            textureCoord: wgl.getAttribLocation(shaderProgram, \"aTextureCoord\"),
+                            vertexColor: wgl.getAttribLocation(shaderProgram, \"aVertexColor\"),
+                            //textureCoord: wgl.getAttribLocation(shaderProgram, \"aTextureCoord\"),
                         },
                         uniformLocations: {
                             projectionMatrix: wgl.getUniformLocation(shaderProgram, \"uProjectionMatrix\"),
@@ -406,16 +442,16 @@ fn dirtyworm() -> content::RawHtml<&'static str> {
                     const buffers = init_buffers(wgl);
 
                     // Load texture
-                    const texture = load_texture(wgl, \"cubetexture.png\");
+                    //const texture = load_texture(wgl, \"cubetexture.png\");
                     // Flip image pixels to bottom-to-top order.  WebGL expects it that way.
-                    wgl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+                    //wgl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
                     // Draw it, you fool!
                     let then = 0;
                     // Draw the scene repeatedly
                     function render(now) {
                         now *= 0.001; // convert to seconds
-                        deltaTime = now - then
+                        deltaTime = now - then;
                         then = now;
 
                         draw_scene(wgl, programInfo, buffers, cube_rotation);
